@@ -39,15 +39,15 @@ Card\
 - basePaymentMode (MINIMUM \| FIXED)\
 - basePaymentAmount (manual entry; required for both modes)\
 \
-~~PlanSettings~~ — **DEPRECATED.** Replaced by `AllocationPlan` + `PlanAllocation`. See `Implementation_Appendix.md` §A1.\
+~~PlanSettings~~ — **DEPRECATED.** Replaced by `AllocationPlan` + `Allocation`. See `Implementation_Appendix.md` §A1.\
 
 AllocationPlan (replaces PlanSettings)\
 - scenarioId\
 - effectiveMonthStart\
 - effectiveMonthEnd (null = active)\
-- allocations: List\<PlanAllocation\>\
+- allocations: List\<Allocation\>\
 
-PlanAllocation\
+Allocation\
 - target (CARD | POOL)\
 - cardId (if CARD)\
 - amount\

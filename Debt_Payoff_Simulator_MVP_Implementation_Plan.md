@@ -80,10 +80,10 @@ always belong to this single scenario.
 - Backend: ScenarioRow, ScenarioDao, ScenarioResource — full CRUD endpoints
 - Frontend: Scenario management UI (view/edit the active scenario)
 
-~~**plan_settings**~~ — **DEPRECATED.** Replaced by `allocation_plans` + `plan_allocations`. See `Implementation_Appendix.md` §A1.
+~~**plan_settings**~~ — **DEPRECATED.** Replaced by `allocation_plans` + `allocations`. See `Implementation_Appendix.md` §A1.
 
-**allocation_plans** + **plan_allocations** (replaces plan_settings)
-- Backend: AllocationPlanRow, PlanAllocationRow, AllocationPlanDao — full CRUD under /scenarios/{id}/allocation-plans
+**allocation_plans** + **allocations** (replaces plan_settings)
+- Backend: AllocationPlanRow, AllocationRow, AllocationPlanDao — full CRUD under /scenarios/{id}/allocation-plans
 - Auto-close behavior: creating a new plan automatically closes the previous open-ended plan
 - Frontend: Allocations page — DataGrid of plans with Add/Edit dialog for date range + allocation target list
 

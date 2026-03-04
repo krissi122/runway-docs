@@ -8,7 +8,7 @@ Design decisions made after the original MVP documents were written. These super
 
 ---
 
-## A1. `plan_settings` Deprecated — Replaced by `allocation_plans` + `plan_allocations`
+## A1. `plan_settings` Deprecated — Replaced by `allocation_plans` + `allocations`
 
 ### Reason
 
@@ -31,7 +31,7 @@ The original `plan_settings` model (focus card, optional secondary card, split %
 
 ---
 
-**`plan_allocations`** — child rows belonging to one `allocation_plan`.
+**`allocations`** — child rows belonging to one `allocation_plan`.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|

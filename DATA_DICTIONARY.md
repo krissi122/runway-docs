@@ -69,7 +69,7 @@ MVP: one active row per `(scenario_id, card_id)`. P1: multiple rows with non-ove
 
 ### ~~`plan_settings`~~ — DEPRECATED
 
-> **Replaced by `allocation_plans` + `plan_allocations`.** See `Implementation_Appendix.md` §A1. This table has been dropped.
+> **Replaced by `allocation_plans` + `allocations`.** See `Implementation_Appendix.md` §A1. This table has been dropped.
 
 ---
 
@@ -90,7 +90,7 @@ Time-ranged allocation strategies for a scenario. The engine uses the plan whose
 
 ---
 
-### `plan_allocations`
+### `allocations`
 
 Child rows of `allocation_plans`. Each row directs a fixed monthly dollar amount to a specific card or the liquidity pool.
 
