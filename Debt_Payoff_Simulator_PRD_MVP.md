@@ -39,13 +39,18 @@ Card\
 - basePaymentMode (MINIMUM \| FIXED)\
 - basePaymentAmount (manual entry; required for both modes)\
 \
-PlanSettings\
-- netPerPaycheck\
-- payFrequency (24 or 26)\
-- monthlyNonDebtExpenses\
-- focusCardId\
-- secondaryCardId (optional)\
-- focusSplitPct (default 100% if no secondary)\
+~~PlanSettings~~ — **DEPRECATED.** Replaced by `AllocationPlan` + `PlanAllocation`. See `Implementation_Appendix.md` §A1.\
+
+AllocationPlan (replaces PlanSettings)\
+- scenarioId\
+- effectiveMonthStart\
+- effectiveMonthEnd (null = active)\
+- allocations: List\<PlanAllocation\>\
+
+PlanAllocation\
+- target (CARD | POOL)\
+- cardId (if CARD)\
+- amount\
 \
 LumpSumEvent\
 - date\
@@ -89,15 +94,11 @@ baseTotal = sum(basePayment)\
 Extra Pool:\
 extraPool = max(0, monthlyDebtBudget - baseTotal)\
 \
-Allocation:\
-If no secondary:\
-All extraPool to focus card\
-If secondary exists:\
-focusExtra = extraPool \* focusSplitPct\
-secondaryExtra = remaining\
-\
-Cap rule:\
-If payment exceeds balance, overflow rolls to other target.\
+Allocation — **DEPRECATED model replaced.** See `Implementation_Appendix.md` §A1.\
+Extra pool is distributed per the active AllocationPlan's target list:\
+- CARD targets: apply min(amount, remainingBalance); overflow → pool\
+- POOL targets: add amount to pool balance\
+- Surplus (extraPool > sum of targets) → pool automatically\
 \
 Lump Sums:\
 Applied in the month they occur before payment allocation.\

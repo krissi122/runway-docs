@@ -2,6 +2,8 @@
 title: Debt Payoff Simulator -- MVP Implementation Plan
 ---
 
+> **Note:** Design decisions made after this document was written are captured in `Implementation_Appendix.md`. Where they conflict, the appendix takes precedence.
+
 # 1. Purpose
 
 This document outlines the implementation plan for the Debt Payoff
@@ -78,9 +80,12 @@ always belong to this single scenario.
 - Backend: ScenarioRow, ScenarioDao, ScenarioResource — full CRUD endpoints
 - Frontend: Scenario management UI (view/edit the active scenario)
 
-**plan_settings** (one row per scenario)
-- Backend: PlanSettingsRow, PlanSettingsDao — GET + upsert under /scenarios/{id}/plan-settings
-- Frontend: Plan Settings panel (focus card, secondary card, split %)
+~~**plan_settings**~~ — **DEPRECATED.** Replaced by `allocation_plans` + `plan_allocations`. See `Implementation_Appendix.md` §A1.
+
+**allocation_plans** + **plan_allocations** (replaces plan_settings)
+- Backend: AllocationPlanRow, PlanAllocationRow, AllocationPlanDao — full CRUD under /scenarios/{id}/allocation-plans
+- Auto-close behavior: creating a new plan automatically closes the previous open-ended plan
+- Frontend: Allocations page — DataGrid of plans with Add/Edit dialog for date range + allocation target list
 
 **card_payment_schedules** (one active row per card per scenario in MVP)
 - Backend: CardPaymentScheduleRow, CardPaymentScheduleDao — full CRUD under /scenarios/{id}/card-schedules

@@ -19,6 +19,7 @@ A named container for a full set of plan inputs. MVP ships with one active scena
 | `id` | `uuid` | No | PK |
 | `name` | `text` | No | Display name, e.g. "Base Plan", "Aggressive Payoff Draft" |
 | `status` | `text` | No | `ACTIVE`, `DRAFT`, or `ARCHIVED`. Only one scenario should be `ACTIVE` at a time. |
+| `initial_pool_balance` | `numeric(10,2)` | No | Starting cash balance for the liquidity pool. Default `0.00`. See `Implementation_Appendix.md` §A2. |
 | `created_at` | `timestamptz` | No | |
 | `updated_at` | `timestamptz` | No | |
 
@@ -66,18 +67,40 @@ MVP: one active row per `(scenario_id, card_id)`. P1: multiple rows with non-ove
 
 ---
 
-### `plan_settings`
+### ~~`plan_settings`~~ — DEPRECATED
 
-Allocation settings for a scenario. Income and non-debt expenses are managed in `income_sources` and `fixed_expenses` respectively. One row per scenario.
+> **Replaced by `allocation_plans` + `plan_allocations`.** See `Implementation_Appendix.md` §A1. This table has been dropped.
+
+---
+
+### `allocation_plans`
+
+Time-ranged allocation strategies for a scenario. The engine uses the plan whose date range covers the month being projected. One open-ended (null `effective_month_end`) plan is active at any time.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
 | `id` | `uuid` | No | PK |
-| `scenario_id` | `uuid` | No | FK → `scenarios` |
-| `focus_card_id` | `uuid` | No | FK → `cards` |
-| `secondary_card_id` | `uuid` | Yes | FK → `cards`; null if no secondary target |
-| `focus_split_pct` | `numeric(5,2)` | No | Percentage of extra pool to focus card. Default `100.00` |
-| `updated_at` | `timestamptz` | No | |
+| `scenario_id` | `uuid` | No | FK → `scenarios` ON DELETE CASCADE |
+| `effective_month_start` | `date` | No | First month this plan applies (inclusive, stored as YYYY-MM-01) |
+| `effective_month_end` | `date` | Yes | Last month this plan applies (inclusive). `NULL` = currently active. |
+
+**Engine resolution rule:** for a given month, use the plan where `effective_month_start <= month AND (effective_month_end IS NULL OR effective_month_end >= month)`.
+
+**Constraint:** only one row per `scenario_id` may have `effective_month_end = NULL` at a time (partial unique index).
+
+---
+
+### `plan_allocations`
+
+Child rows of `allocation_plans`. Each row directs a fixed monthly dollar amount to a specific card or the liquidity pool.
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | PK |
+| `plan_id` | `uuid` | No | FK → `allocation_plans` ON DELETE CASCADE |
+| `target` | `text` | No | `CARD` or `POOL` |
+| `card_id` | `uuid` | Yes | FK → `cards`. Required when `target = CARD`, null when `target = POOL`. |
+| `amount` | `numeric(10,2)` | No | Monthly dollar amount to allocate |
 
 ---
 
@@ -261,5 +284,6 @@ One row per month, aggregated across all cards.
 | `totalBasePayments` | `BigDecimal` | |
 | `totalExtraPayments` | `BigDecimal` | |
 | `totalUtilizationPct` | `BigDecimal` | Aggregate utilization across all cards |
+| `poolBalance` | `BigDecimal` | Running liquidity pool balance at end of month. See `Implementation_Appendix.md` §A2. |
 
 **Note:** Utilization threshold crossings (90%, 75%, 50%, 25%) are derived client-side from projection and ledger rows via MUI X. No separate threshold table.
