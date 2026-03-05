@@ -6,6 +6,12 @@ Tracked improvements and tech debt items. Add entries here as they come up durin
 
 ## Frontend
 
+### Projection Summary: Hide Paid-Off Cards Toggle
+Add a toggle (checkbox or switch) above the Summary tab's expandable table to hide cards where `isPaidOff === true` from the expanded card sub-rows. When enabled, paid-off cards are filtered out entirely rather than shown at reduced opacity. Useful for focusing on active debt once cards start clearing.
+
+### Projection Summary: Paycheck Grouping
+In the Summary tab expandable rows, group card details by paycheck rather than showing a flat card list. Each month expands to two paycheck sub-rows (Paycheck 1, Paycheck 2); each paycheck sub-row then expands to show cards whose `paymentDueDay` falls before the next paycheck date. Requires: (1) storing a pay anchor date on income sources so the frontend can derive actual paycheck dates per month, and (2) deciding whether the split logic lives in the frontend or the projection engine adds paycheck-level rows to its output. The UI hierarchy needs different column configs at each level (month summary / paycheck summary / card detail), which MUI X DataGrid Pro detail panels or a custom MUI Table + Collapse solution can support.
+
 ### Income Table: Meaningful Anchor Date Display
 The `payAnchorDate` column is currently hidden from the income table because a raw date is not useful at a glance. For biweekly income, derive and display the next upcoming payday (or the next two) rather than the raw anchor. For semimonthly and monthly, the pay day columns already cover this. Revisit once the projection engine is wired up and we know what cadence data is available in the response.
 
