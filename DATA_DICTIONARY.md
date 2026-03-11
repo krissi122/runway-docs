@@ -45,6 +45,28 @@ Global pool of credit lines. All cards are shared across scenarios. P1/P2 may ad
 
 ---
 
+### `loans`
+
+Global pool of installment debt (auto loans, student loans, personal loans, mortgages). Not scenario-scoped. Soft-deleted via the `active` flag.
+
+The engine treats loan payments as committed costs that reduce disposable income each month. Interest is not calculated — it is already amortized into `monthly_payment`. The engine tracks balance to zero and records payoff month.
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | PK |
+| `name` | `text` | No | e.g. "Car Loan", "Student Loan" |
+| `balance` | `numeric(12,2)` | No | Current balance at time of last save |
+| `monthly_payment` | `numeric(10,2)` | No | Contractual fixed monthly payment |
+| `end_date` | `date` | No | Month of final scheduled payment. Engine stops deducting `monthly_payment` after this month. |
+| `apr` | `numeric(6,4)` | Yes | Informational only — not used by engine. Interest is already amortized into the payment. |
+| `active` | `boolean` | No | Soft delete. Default `true`. Inactive loans are excluded from engine inputs and UI. |
+| `created_at` | `timestamptz` | No | |
+| `updated_at` | `timestamptz` | No | |
+
+**Engine resolution rule:** each month, if `month <= loan.endDate` AND `balance > 0`, deduct `monthly_payment` (capped at balance) from balance. When balance hits zero or end date is reached, the loan is done and the freed `monthly_payment` flows into the extra pool available for card payoff.
+
+---
+
 ### `card_payment_schedules`
 
 Defines the payment policy for a card within a scenario. Scenario-specific so different scenarios can model different payment strategies per card.
@@ -98,8 +120,9 @@ Child rows of `allocation_plans`. Each row directs a fixed monthly dollar amount
 |---|---|---|---|
 | `id` | `uuid` | No | PK |
 | `plan_id` | `uuid` | No | FK → `allocation_plans` ON DELETE CASCADE |
-| `target` | `text` | No | `CARD` or `POOL` |
-| `card_id` | `uuid` | Yes | FK → `cards`. Required when `target = CARD`, null when `target = POOL`. |
+| `target` | `text` | No | `CARD`, `POOL`, `BASE_POOL`, or `LOAN` |
+| `card_id` | `uuid` | Yes | FK → `cards`. Required when `target = CARD`, null otherwise. |
+| `loan_id` | `uuid` | Yes | FK → `loans`. Required when `target = LOAN`, null otherwise. |
 | `amount` | `numeric(10,2)` | No | Monthly dollar amount to allocate |
 
 ---
@@ -114,8 +137,9 @@ One-off payment events applied in a specific month before regular payment alloca
 | `scenario_id` | `uuid` | No | FK → `scenarios` |
 | `apply_date` | `date` | No | Month the lump sum is applied; day component ignored by engine |
 | `amount` | `numeric(10,2)` | No | |
-| `target` | `text` | No | `FOCUS` or `SPECIFIC_CARD` |
-| `target_card_id` | `uuid` | Yes | FK → `cards`; required when `target = SPECIFIC_CARD`, null when `target = FOCUS` |
+| `target` | `text` | No | `FOCUS`, `SPECIFIC_CARD`, or `SPECIFIC_LOAN` |
+| `target_card_id` | `uuid` | Yes | FK → `cards`. Required when `target = SPECIFIC_CARD`, null otherwise. |
+| `target_loan_id` | `uuid` | Yes | FK → `loans`. Required when `target = SPECIFIC_LOAN`, null otherwise. |
 | `created_at` | `timestamptz` | No | |
 
 ---
@@ -270,6 +294,24 @@ One row per card per month in the projection.
 | `interestApplied` | `BigDecimal` | Interest applied after payments |
 | `endingBalance` | `BigDecimal` | |
 | `utilizationPct` | `BigDecimal` | `endingBalance / creditLimit` |
+
+### `MonthlyLoanDetail`
+
+One row per loan per month in the projection.
+
+| Field | Type | Notes |
+|---|---|---|
+| `month` | `String` | `YYYY-MM` |
+| `loanId` | `UUID` | |
+| `loanName` | `String` | |
+| `startingBalance` | `BigDecimal` | Balance before this month's payment |
+| `payment` | `BigDecimal` | Amount actually applied (capped at balance; includes any extra payments) |
+| `endingBalance` | `BigDecimal` | |
+| `paidOff` | `Boolean` | True when ending balance is zero |
+
+No `utilizationPct` — loans have no credit limit.
+
+---
 
 ### `MonthlySummaryRow`
 

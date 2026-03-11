@@ -136,7 +136,62 @@ Nav links updated: **Cards · Fixed Expenses · Income · Plan · Allocations ·
 
 ---
 
-## A5. Backlog Items (from this design session)
+## A5. `allocations` — Updated Targets (BASE_POOL)
+
+`target` now supports three values: `CARD`, `POOL`, `BASE_POOL`.
+
+**`BASE_POOL`** — the minimum balance the liquidity pool must hold. The engine tops up the pool toward this target balance before routing any money to `POOL` or `CARD` allocations. Once the pool meets or exceeds the target, `BASE_POOL` allocations are skipped. Only one `BASE_POOL` allocation per plan is meaningful (the engine processes the first one found).
+
+**Engine dispatch order (per month, from extra pool):**
+1. `BASE_POOL` — top up pool to target balance (only if pool < target)
+2. `POOL` — route fixed amount into pool
+3. `CARD` — sorted by `allocation.amount` ascending, applied greedily
+4. Unrouted remainder → pool
+
+`FOCUS` lump sums follow the same dispatch order as the active plan.
+
+**Constraints:**
+- `target IN ('CARD', 'POOL', 'BASE_POOL', 'LOAN')`
+- `card_id IS NOT NULL` when `target = CARD`, null otherwise
+- `loan_id IS NOT NULL` when `target = LOAN`, null otherwise
+
+---
+
+## A6. Loans
+
+### Reason
+
+Installment debt (auto loans, student loans, personal loans, mortgages) needs to participate in the projection engine but differs from revolving credit cards:
+
+- No credit limit → no utilization or threshold tracking
+- Interest is already amortized into the fixed monthly payment → engine does not calculate interest
+- Loans have a contractual end date → engine stops expecting payments after that month
+- APR is stored as informational only (nullable)
+
+### Data Model
+
+New global `loans` table (see `DATA_DICTIONARY.md`). Not scenario-scoped — same as `cards`.
+
+### Engine Treatment
+
+Loans are processed as a separate debt category alongside cards:
+
+1. **Base payment step:** for each active loan (`month <= endDate AND balance > 0`), deduct `monthly_payment` (capped at balance) from the loan balance. This payment is a committed cost — it reduces the same disposable income pool that card base payments draw from.
+2. **No interest calculation** — not needed; the amortized payment already accounts for it.
+3. **Extra payments:** loans can be targeted by allocation plans (`target = LOAN`) and lump sums (`target = SPECIFIC_LOAN`). Extra payments reduce balance further, potentially paying off the loan before `endDate`.
+4. **Payoff cascade:** when a loan reaches zero balance or its `endDate` passes, the freed `monthly_payment` flows into the extra pool and becomes available for card payoff in subsequent months.
+5. **Stop condition:** the projection ends when all cards AND all loans are paid off (balance = 0).
+
+### Allocation and Lump Sum Extensions
+
+- `allocations.target` gains `LOAN`; new nullable `loan_id` FK → `loans`
+- `lump_sums.target` gains `SPECIFIC_LOAN`; new nullable `target_loan_id` FK → `loans`
+
+---
+
+## A7. Backlog Items (from this design session)
 
 - **Mid-timeline plan insertion:** inserting an `allocation_plan` between two existing bounded plans requires rebalancing end dates of the surrounding plans. Deferred.
 - **Plan validation UI:** surface a warning when `sum(allocations) > extraPool` so users know the month can't be finalized.
+- **Allocation percentages:** `allocations.amount` is currently a fixed dollar amount. A future version should support percentage-of-disposable allocations.
+- **Loan APR in projection:** if APR is present, the engine could optionally compute and display interest as a projection-quality metric (informational, not affecting balance calculation).

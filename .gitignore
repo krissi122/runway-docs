@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Tasks
+tasks/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
