@@ -239,40 +239,59 @@ Persisted projection rows produced by the engine for each scenario. One row per 
 
 ### `monthly_card_ledger`
 
-Ground truth record of what actually happened each month per card. Scenario-independent. Rows are written when the user confirms activity for a card. Records become immutable when the month closes.
+Ground truth record of what actually happened each month per card. Scenario-independent. Written when the user confirms a month. Records become immutable two months after confirmation.
 
 | Column | Type | Nullable | Notes |
 |---|---|---|---|
 | `id` | `uuid` | No | PK |
-| `card_id` | `uuid` | No | FK → `cards` |
+| `card_id` | `uuid` | No | FK → `cards` ON DELETE RESTRICT |
 | `month` | `date` | No | First day of the month (YYYY-MM-01) |
-| `actual_payment` | `numeric(10,2)` | Yes | Null until confirmed |
-| `actual_interest` | `numeric(10,2)` | Yes | Null until confirmed |
-| `actual_ending_balance` | `numeric(12,2)` | Yes | Null until confirmed. Used as engine starting point for confirmed cards when recomputing. |
-| `confirmed_at` | `timestamptz` | Yes | Null until confirmed |
-| `is_immutable` | `boolean` | No | Set to true when month closes. Immutable records cannot be edited. |
+| `pre_payment_balance` | `numeric(12,2)` | No | Card balance before this month's payment was made |
+| `payment_amount` | `numeric(12,2)` | Yes | Actual payment made; null if not recorded |
+| `payment_made` | `boolean` | No | Whether a payment was made this month. Default `false`. |
+| `confirmed_at` | `timestamptz` | No | Set to `now()` on insert/upsert |
+| `is_immutable` | `boolean` | No | Set to `true` two months after confirmation. Immutable rows block upsert but allow `payment_made` updates. |
 
 **Unique constraint:** `(card_id, month)`
+
+**Immutability rule:** on `POST /ledger/confirm` for month M, any row for month `M - 2` is set immutable. Immutable rows are excluded from the upsert `WHERE` clause (`WHERE is_immutable = false`).
+
+---
+
+### `monthly_loan_ledger`
+
+Same shape and rules as `monthly_card_ledger`, scoped to loans.
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `uuid` | No | PK |
+| `loan_id` | `uuid` | No | FK → `loans` ON DELETE RESTRICT |
+| `month` | `date` | No | First day of the month (YYYY-MM-01) |
+| `pre_payment_balance` | `numeric(12,2)` | No | Loan balance before this month's payment was made |
+| `payment_amount` | `numeric(12,2)` | Yes | Actual payment made; null if not recorded |
+| `payment_made` | `boolean` | No | Whether a payment was made this month. Default `false`. |
+| `confirmed_at` | `timestamptz` | No | Set to `now()` on insert/upsert |
+| `is_immutable` | `boolean` | No | Set to `true` two months after confirmation. |
+
+**Unique constraint:** `(loan_id, month)`
 
 ---
 
 ## Read Logic
 
 ### On load (no recompute)
-- **Past months:** read from `monthly_card_ledger`. Actuals if confirmed, empty if not. Scenario is irrelevant.
-- **Future months:** read from `scenario_projections` for the active scenario.
+- **Past months:** read from `monthly_card_ledger` / `monthly_loan_ledger`. Confirmed if row exists, unconfirmed otherwise. Scenario is irrelevant.
+- **Future months:** derived from `POST /scenarios/{id}/projection` (stateless engine run).
 
 ### Current month (hybrid)
-The current month is the only month where both tables are in play simultaneously:
-- Per card: check `monthly_card_ledger` first. If confirmed, use actuals.
-- Fall back to `scenario_projections` for cards not yet confirmed.
+The projection engine always runs from `cards.balance` / `loans.balance` as the starting point. Once ledger-aware starting balance resolution is implemented (see backlog), the orchestrator will prefer the most recent confirmed ledger row over the stored balance for the projection anchor.
 
 ### On recompute (inputs changed)
-The engine only reruns when a user saves changed inputs. Starting balance resolution per card:
-- If the card has a confirmed `actual_ending_balance` in `monthly_card_ledger` for the current month → use that.
-- Otherwise → use `cards.balance`.
+`POST /scenarios/{id}/projection` is stateless — reruns fully each time. Starting balance resolution per card:
+- (Future) If a confirmed `monthly_card_ledger` row exists for a recent month → derive anchor balance from that row and run forward.
+- (Current) Always use `cards.balance` / `loans.balance`.
 
-Recompute overwrites `scenario_projections` rows from the current month forward for the affected scenario. Past rows in `monthly_card_ledger` are never touched.
+`cards.balance` and `loans.balance` are updated by `LedgerOrchestrator.confirm()` each time a month is confirmed, so the stored balance stays fresh.
 
 ---
 

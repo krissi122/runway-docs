@@ -12,6 +12,20 @@ Month-1 crossings are currently excluded entirely from the "Next Target" view be
 ### Projection Views: Exclude Zero-Balance Cards
 Cards that have been fully paid off (ending balance = $0) appear in multiple projection views but are noise once cleared. Apply a consistent "hide paid-off" filter across: (1) the Summary tab's expanded card sub-rows, (2) the Thresholds tab's next-target list (a paid-off card has no next threshold to work toward), and (3) the Card Detail tab's card selector. Coordinate with the existing "Hide Paid-Off Cards Toggle" backlog item — these may be the same toggle applied globally rather than per-view.
 
+### Projection: "Paid Off" Column Lifecycle (Targeting → Yes)
+
+Currently the "Paid Off" column in the Summary sub-rows, Card Detail, and Loan Detail tabs always shows `—`. The engine's `paidOff: true` flag (when projected ending balance hits zero) should eventually drive a "Targeting" state, and confirmed ledger data should drive the final "Yes" state. Full lifecycle:
+
+| State | Condition | Display |
+|---|---|---|
+| Not targeting | Projected ending balance > $0 | `—` |
+| Targeting | `paidOff === true` from projection (projected balance hits $0) | `Targeting` (amber) |
+| Confirmed paid | Ledger row exists for that month with `paymentMade: true` AND `prePaymentBalance > 0` AND `paymentAmount >= prePaymentBalance` (or balance confirmed at $0) | `Yes` (green) |
+
+Requires the FE to cross-reference ledger data with projection rows per card per month. Defer until ledger confirmation UI is live and ledger data is reliably available in `ProjectionPage`.
+
+---
+
 ### Projection Summary: Hide Paid-Off Cards Toggle
 Add a toggle (checkbox or switch) above the Summary tab's expandable table to hide cards where `isPaidOff === true` from the expanded card sub-rows. When enabled, paid-off cards are filtered out entirely rather than shown at reduced opacity. Useful for focusing on active debt once cards start clearing.
 
