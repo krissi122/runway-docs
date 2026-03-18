@@ -235,6 +235,11 @@ A snapshot must be recomputed when `dirty = true` OR `valid_for_month != current
 
 ---
 
+### Snapshot History (Append Instead of Replace)
+Currently `scenario_snapshots` stores one row per scenario (upsert replaces on conflict). Each projection recompute overwrites the previous snapshot, so there is no history. Change the schema to append a new row per recompute, keyed by `(scenario_id, valid_for_month, computed_at)` or a similar composite. Retain the latest N snapshots per scenario (or all within a rolling window) so users can compare projections across time or revert to a prior result. Requires schema migration, DAO update, and a retention/cleanup policy.
+
+---
+
 ### Timezone Handling
 Date values flow between the frontend, backend, and database in a mix of local and UTC contexts, causing subtle off-by-one issues. Known manifestations:
 
