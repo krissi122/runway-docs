@@ -54,6 +54,16 @@ Extend `LedgerOrchestrator` and `LedgerResource` with:
 
 ---
 
+### Miscellaneous Spend — Entry and Projection Visibility
+The engine already supports a `MISC` lump sum target: it subtracts the amount from that month's disposable and tracks it as `totalMiscSpend` in `MonthlySummary`. However, the current UX has two gaps:
+
+1. **Entry method** — MISC spend can only be entered as a one-off lump sum via the Lump Sums page. There is no way to model recurring miscellaneous spend (e.g. "I typically spend $200/month on irregular purchases"). Evaluate whether this belongs as a field on the scenario/plan settings (a flat monthly buffer deducted before extra allocation), or as a recurring lump sum pattern, or something else.
+2. **Projection visibility** — `totalMiscSpend` is computed and returned in `MonthlySummary` but never rendered in `ProjectionPage`. It should appear somewhere in the monthly summary row or expanded section so users can see what the engine is accounting for.
+
+Design question to resolve before implementation: should recurring misc spend live on the scenario (a standing monthly buffer) or be expressed as a recurring lump sum? The former is simpler; the latter is more flexible.
+
+---
+
 ### Projection Thresholds: Surface Month-1 Crossings Separately
 Month-1 crossings are currently excluded entirely from the "Next Target" view because the engine records all thresholds a card is already below at projection start in month 1 (e.g. a card at 65% util logs 90% and 75% in month 1 before any real progress is made). However, a card can also legitimately cross a threshold *due to* that month's payment — and that crossing should not be lost. The correct behavior: for month-1, apply the same "next threshold only" filter as all other months (i.e. show only the single next threshold crossed that month, not all of them), rather than excluding the month entirely. The already-satisfied thresholds (those the card was below before any payment) should be surfaced separately — likely as an "Already Achieved" indicator — so users can see which milestones are already behind them vs. upcoming. Coordinate with the zero-balance exclusion item below.
 
@@ -154,6 +164,18 @@ Currently `MINIMUM` payment mode in `EngineCardSchedule` is treated identically 
 
 ---
 
+### Allocation Plan Rethink
+The current allocation plan system (`AllocationPlan` + `Allocation` records, managed via a dedicated page) was built as a general-purpose extra-funds routing mechanism. In practice it is complex to configure, hard to understand at a glance, and the UX has been removed from the nav bar pending a rethink. The allocation page and API remain in place but are not surfaced.
+
+Open questions before reimplementing:
+- **What is the actual user need?** Most users want to answer "where does my extra money go each month?" — probably a simpler priority-ordered list (focus card first, then secondary, then pool) rather than a full allocation table.
+- **Does BASE_POOL / POOL / CARD / LOAN as a target model make sense to expose directly?** Or should this be abstracted into something higher-level (e.g. "pay down debt aggressively" vs. "build a buffer first")?
+- **Relationship to the scenario settings page** — plan settings (`PlanSettingsPage`) already has focus card and split concepts. Allocations may just be a more powerful version of the same thing, or they may be redundant.
+
+Design this before reimplementing. The backend model can be kept or replaced depending on the outcome.
+
+---
+
 ## Backend
 
 ### Early Next-Month Unlock
@@ -213,6 +235,18 @@ A snapshot must be recomputed when `dirty = true` OR `valid_for_month != current
 
 ---
 
+### Timezone Handling
+Date values flow between the frontend, backend, and database in a mix of local and UTC contexts, causing subtle off-by-one issues. Known manifestations:
+
+- **Frontend date inputs** — dates entered by the user (e.g. paycheck anchor dates, lump sum dates) are treated as local time by JavaScript. When serialized to ISO strings or passed as query params they may shift by a day depending on the user's UTC offset.
+- **DB storage** — `DATE` columns (e.g. `month`, `paycheck_date`, `apply_date`) store dates without timezone; `TIMESTAMPTZ` columns (e.g. `confirmed_at`) are stored in UTC. Round-trip behavior between Kotlin's `LocalDate` / `Instant` and Postgres is generally safe via JDBI, but the frontend → backend boundary is not.
+- **`currentMonthStr` on the frontend** — computed from `new Date()` using local time. In negative UTC offsets (e.g. US timezones), the first day of the month at midnight local time is still the last day of the prior month in UTC, which can cause the current month to be misidentified.
+
+**Recommended fix direction:**
+- Frontend: always derive `currentMonthStr` and format user-entered date values in UTC (`new Date().toISOString().slice(0,7) + '-01'` or equivalent), not local time.
+- Backend: validate that all `LocalDate` parameters deserialized from query strings and JSON bodies are treated as calendar dates with no timezone conversion. Ensure no `Instant`-to-`LocalDate` conversions happen without an explicit zone.
+- Audit any `new Date(isoString)` calls that feed into date comparisons — if the ISO string has no time component (e.g. `"2026-03-01"`), append `T12:00:00` before parsing to avoid UTC midnight rollback.
+
 ### End-of-Month Date Clamping for Fixed Expenses
 When a fixed expense has a `dueDayOfMonth` of 29, 30, or 31 and the billing cycle falls in February, the projection engine must treat the due date as the last day of February rather than skipping or erroring. Apply the same clamping logic to any month shorter than the stored day (e.g. April 31 → April 30). The canonical rule: `min(dueDayOfMonth, lastDayOfMonth)`.
 
@@ -228,6 +262,16 @@ Expand integration test coverage for database interactions. Ensure tests run aga
 
 ### Projection Latency Optimization
 The `/projection` endpoint was showing noticeable latency from full recompute on every request. Projection snapshots (now implemented) address the common case — cached results are served directly when nothing has changed. Remaining work if latency is still a concern: profile DB query count per request (N+1 risk in allocation/card loading), and consider whether the engine itself has any hot loops worth optimizing for large projection windows.
+
+### Frontend Rendering Performance
+The projection page is noticeably slow, particularly as the number of months, cards, and loans grows. Root causes to investigate:
+
+- **Re-render scope** — `ProjectionPage` holds all state at the top level; any state change (edit field keystroke, section toggle, month expand) re-renders the entire tree. Identify hot paths with React DevTools Profiler.
+- **Large list rendering** — the summary DataGrid renders all months at once (up to 360 rows). Evaluate whether MUI X DataGrid's built-in virtualization is active and effective, or whether a windowed list approach is needed for the expanded row content.
+- **Memoization** — derived data (filtered card details, grouped income by month, ledger lookups) is recomputed on every render. Candidate selectors for `useMemo`; candidate callbacks for `useCallback`.
+- **Expanded row content** — each expanded month renders multiple full tables. Once `ProjectionPage` is refactored into section components, `React.memo` on those components becomes straightforward.
+
+Coordinate with the ProjectionPage refactor — component extraction is a prerequisite for effective memoization.
 
 ---
 
