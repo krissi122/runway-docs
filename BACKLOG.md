@@ -25,7 +25,7 @@ In the Summary tab, when a month row is expanded, Income, Cards, and Loans are c
 
 ---
 
-### Variable Fixed Expenses + Fixed Expense Ledger
+### Variable Fixed Expenses + Fixed Expense Ledger ✓ Done
 Full-stack feature to support fixed expenses with variable actual amounts and to track expense payment confirmation in the ledger.
 
 **Backend — schema and model:**
@@ -246,6 +246,11 @@ Date values flow between the frontend, backend, and database in a mix of local a
 - Frontend: always derive `currentMonthStr` and format user-entered date values in UTC (`new Date().toISOString().slice(0,7) + '-01'` or equivalent), not local time.
 - Backend: validate that all `LocalDate` parameters deserialized from query strings and JSON bodies are treated as calendar dates with no timezone conversion. Ensure no `Instant`-to-`LocalDate` conversions happen without an explicit zone.
 - Audit any `new Date(isoString)` calls that feed into date comparisons — if the ISO string has no time component (e.g. `"2026-03-01"`), append `T12:00:00` before parsing to avoid UTC midnight rollback.
+
+### Loan Payment Due Day
+Add `paymentDueDay` to loans (migration + model + DAO), thread it through `EngineLoan` → `MonthlyLoanDetail` → projection API response → frontend `MonthlyLoanDetail` type. Use it to sort loan rows by due day in the projection page (same pattern as fixed expenses). Bump `ScenarioSnapshotAccessor.CURRENT_VERSION` when the shape change lands.
+
+---
 
 ### End-of-Month Date Clamping for Fixed Expenses
 When a fixed expense has a `dueDayOfMonth` of 29, 30, or 31 and the billing cycle falls in February, the projection engine must treat the due date as the last day of February rather than skipping or erroring. Apply the same clamping logic to any month shorter than the stored day (e.g. April 31 → April 30). The canonical rule: `min(dueDayOfMonth, lastDayOfMonth)`.
